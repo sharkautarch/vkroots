@@ -19,6 +19,7 @@
 #include <optional>
 #include <string_view>
 #include <array>
+#include <functional>
 #include <atomic>
 
 #define VKROOTS_VERSION_MAJOR 0
