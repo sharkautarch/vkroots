@@ -88,8 +88,8 @@ namespace vkroots::helpers {
     using MapData = Data;
 
     SynchronizedMapObject() = delete;
-    SynchronizedMapObject(const SynchronizedMapObject<T>&) = delete;
-    SynchronizedMapObject(SynchronizedMapObject<T>&&) = delete;
+    SynchronizedMapObject(const SynchronizedMapObject<Key, Data>&) = delete;
+    SynchronizedMapObject(SynchronizedMapObject<Key, Data>&&) = delete;
 
     static std::shared_ptr<Data> get(const Key& key) {
       std::unique_lock lock{ s_mutex };
