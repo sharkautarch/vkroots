@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <memory>
 #include <mutex>
+#include <atomic>
 #include <type_traits>
 #include <memory>
 #include <cassert>

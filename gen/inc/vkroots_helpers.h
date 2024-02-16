@@ -49,7 +49,7 @@ namespace vkroots::helpers {
     function(std::forward<Args>(arguments)..., &count, outArray.data());
     return count;
   }
-
+  
   template <typename Func, typename InArray, typename OutType, typename... Args>
   VkResult append(Func function, const InArray& inArray, uint32_t* pOutCount, OutType* pOut, Args&&... arguments) {
     uint32_t baseCount = 0;
@@ -81,31 +81,35 @@ namespace vkroots::helpers {
     return nullptr;
   }
 
+
   template <typename Key, typename Data>
-  class SynchronizedMapObject {
+  class SynchronizedMapObjectPointer {
+    //friend class SynchronizedMapObject<Key, Data>;
   public:
     using MapKey = Key;
     using MapData = Data;
+    static std::mutex s_mutex;
+    static std::unordered_map<Key, Data> s_map;
 
-    SynchronizedMapObject() = delete;
-    SynchronizedMapObject(const SynchronizedMapObject<Key, Data>&) = delete;
-    SynchronizedMapObject(SynchronizedMapObject<Key, Data>&&) = delete;
+    SynchronizedMapObjectPointer() = delete;
+    SynchronizedMapObjectPointer(SynchronizedMapObjectPointer<Key, Data>&&) = delete;
 
     static std::shared_ptr<Data> get(const Key& key) {
       std::unique_lock lock{ s_mutex };
       auto iter = s_map.find(key);
       if (iter == s_map.end())
         return nullptr;
-      return iter->second;
+      return  std::make_shared<Data>(iter->second);
     }
 
-    static std::shared_ptr<Data> create(const Key& key, Data data) {
+    static std::shared_ptr<Data> create(std::unordered_map<Key, Data> pair) {
       std::unique_lock lock{ s_mutex };
-      auto val = s_map.insert(
-        std::piecewise_construct,
-        std::forward_as_tuple(key),
-        std::forward_as_tuple(std::make_shared<Data>(std::move(data))));
-      return val.first->second;
+      s_map.insert(pair.begin(), pair.end());
+      return nullptr;
+      /*auto iter = s_map.find(key);
+      if (iter == s_map.end())
+        return nullptr;
+      return  std::make_shared<Data>(iter->second);*/
     }
 
     static bool remove(const Key& key) {
@@ -116,19 +120,87 @@ namespace vkroots::helpers {
       s_map.erase(iter);
       return true;
     }
+  };
+  
+  template <typename Key, typename Data>
+  class SynchronizedMapObject {
+  public:
+    using MapKey = Key;
+    using MapData = Data;
+    using Parent = vkroots::helpers::SynchronizedMapObjectPointer<Key, Data>;
+    using Self = vkroots::helpers::SynchronizedMapObject<Key, Data>;
+    const MapKey local_key;
+    
+    
+    SynchronizedMapObject(const Key key) : local_key{key} {};
+  
+    static Self get(const Key& key) {
+      return SynchronizedMapObject(key);
+    }
+  
+    static Self create(const Key key, Data data) {
+      std::unordered_map<Key, Data> temp = {};
+      temp.insert(
+        std::tuple(key, std::move(data)));
+      vkroots::helpers::SynchronizedMapObjectPointer<Key, Data>::create(temp);
+      return SynchronizedMapObject(std::move(key));
+    }
+  
+    Data* get() {
+      return vkroots::helpers::SynchronizedMapObjectPointer<Key, Data>::get(local_key).get();
+    }
 
-  private:
+    const Data* get() const {
+      return vkroots::helpers::SynchronizedMapObjectPointer<Key, Data>::get(local_key).get();
+    }
+    
+    std::shared_ptr<Data> get_shared() {
+      return vkroots::helpers::SynchronizedMapObjectPointer<Key, Data>::get(local_key);
+    }
 
-    static std::mutex s_mutex;
-    static std::unordered_map<Key, Data> s_map;
+    const std::shared_ptr<Data> get_shared() const {
+      return vkroots::helpers::SynchronizedMapObjectPointer<Key, Data>::get(local_key);
+    }
+
+    std::shared_ptr<Data> operator->() {
+      return get_shared();
+    }
+
+    const std::shared_ptr<Data> operator->() const {
+      return get_shared();
+    }
+
+    bool has() const {
+      return get_shared() != nullptr;
+    }
+
+    operator bool() const {
+      return has();
+    }
+    
+    operator bool() {
+      return has();
+    }
+    
+
+    void clear() {
+      remove(local_key);
+    }
+  
+    static bool remove(const Key& key) {
+      return vkroots::helpers::SynchronizedMapObjectPointer<Key, Data>::remove(key);
+    }
   };
 
+
+#define VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE_POINTER(name, key) \
+  using name = ::vkroots::helpers::SynchronizedMapObjectPointer<key, name##Data>;
 #define VKROOTS_DEFINE_SYNCHRONIZED_MAP_TYPE(name, key) \
   using name = ::vkroots::helpers::SynchronizedMapObject<key, name##Data>;
-
+  
 #define VKROOTS_IMPLEMENT_SYNCHRONIZED_MAP_TYPE(x) \
-  template <> std::mutex x::s_mutex = {}; \
-  template <> std::unordered_map<x::MapKey, x::MapData> x::s_map = {};
+  template <> std::mutex x::Parent::s_mutex = {}; \
+  template <> std::unordered_map<x::MapKey, x::MapData> x::Parent::s_map = {}
 
 }
 
