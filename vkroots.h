@@ -19,6 +19,7 @@
 #include <optional>
 #include <string_view>
 #include <array>
+#include <functional>
 #include <atomic>
 
 #define VKROOTS_VERSION_MAJOR 0
@@ -14135,14 +14136,13 @@ namespace vkroots::helpers {
     return nullptr;
   }
 
-  
   template <typename Key, typename Data>
   class SynchronizedMapObject {
   public:
     using MapKey = Key;
     using MapData = Data;
 
-    static SynchronizedMapObject get(const Key& key) {
+     static SynchronizedMapObject get(const Key& key) {
       {
 #ifdef VKROOTS_DEBUG
       	  printf("in get()\n");
@@ -14195,9 +14195,8 @@ namespace vkroots::helpers {
       std::unique_lock lock{ s_mutex };
       
       uint32_t pendingIdx = s_pendingWaitsIdx;
-      Key pending[pendingIdx];
-      
       if ( pendingIdx > 0 ) {
+        Key pending[pendingIdx];
         for (uint32_t i = 0; i < pendingIdx; i++) {
           pending[i]=s_pendingWaits[i];
         }
@@ -14310,8 +14309,6 @@ namespace vkroots::helpers {
   template <> std::atomic<uint32_t> x::s_waitMapIdx = 0; \
   template <> std::atomic<uint32_t> x::s_pendingWaitsIdx = 0; \
   template <> std::array<bool, 64> x::s_boolPool = {};
-  
-
 
 }
 namespace vkroots {
