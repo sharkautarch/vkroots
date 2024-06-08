@@ -10,7 +10,7 @@ namespace vkroots {
     template <class Fn>
     struct implementation final : interface {
       consteval implementation() : fn{} {}
-      consteval implementation(Fn fn) : fn{*fn}, f{*(this->fn)} {}
+      consteval implementation(Fn fn) : fn{fn}, f{*(this->fn)} {}
       consteval implementation(const implementation<Fn>& __restrict__ other) = default;
       consteval const implementation<Fn>& operator=(const implementation<Fn>& __retrict__ ) const {
         return std::move(*this);
@@ -39,7 +39,7 @@ namespace vkroots {
       constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {};
 
       template <class Fn> requires std::invocable<Fn, TArgs...> || ConceptNullFunc<Fn, R>
-      constexpr constexpr_function(Fn fn) : m_fn{static_cast<const interface>(implementation<Fn* __restrict__>(&fn))} {
+      constexpr constexpr_function(Fn fn) : m_fn{static_cast<const interface>(implementation<Fn>(fn))} {
       }
 
       constexpr auto __attribute__((visibility("protected"))) operator()(TArgs... args) const -> R {
