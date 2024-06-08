@@ -20,6 +20,7 @@
 #include <string_view>
 #include <array>
 #include <functional>
+#include <bit>
 
 #define VKROOTS_VERSION_MAJOR 0
 #define VKROOTS_VERSION_MINOR 1

@@ -20,6 +20,7 @@
 #include <string_view>
 #include <array>
 #include <functional>
+#include <bit>
 
 #define VKROOTS_VERSION_MAJOR 0
 #define VKROOTS_VERSION_MINOR 1
@@ -28,6 +29,26 @@
 #define VKROOTS_VERSION VK_MAKE_API_VERSION(0, VKROOTS_VERSION_MAJOR, VKROOTS_VERSION_MINOR, VKROOTS_VERSION_PATCH)
 
 namespace vkroots {
+
+  template <class>
+  class constexpr_function;
+  
+  template <class R, class... TArgs>
+  class constexpr_function<R(TArgs...)>;
+  
+  template <class> struct function_traits {};
+
+  template <class R, class B, class... TArgs>
+  struct function_traits<R (B::*)(TArgs...) const> {
+    using type = R(TArgs...);
+  };
+
+  template <class F>
+  constexpr_function(F) -> constexpr_function<typename function_traits<decltype(&F::operator())>::type>;
+  
+  template <class Fn, class R>
+  concept ConceptNullFunc = (std::is_trivial_v<Fn> || std::is_fundamental_v<Fn>)
+                       && std::is_same<R,std::nullptr_t>::value;
 
   // Consistency!
   using PFN_vkGetPhysicalDeviceProcAddr = PFN_GetPhysicalDeviceProcAddr;
@@ -63,12 +84,25 @@ namespace vkroots {
   }
 
   template <typename Type, typename AnyStruct>
-  const Type* FindInChain(const AnyStruct* obj) {
+  constexpr const Type* FindInChain(const AnyStruct* obj) {
+  	using AnyStructBase = std::remove_cvref_t<AnyStruct>;
+  	using TypeBase = std::remove_cvref_t<Type>;
     static_assert(TypeIsSinglePointer<decltype(obj)>());
 
-    for (const VkBaseInStructure* header = reinterpret_cast<const VkBaseInStructure*>(obj); header; header = header->pNext) {
-      if (header->sType == ResolveSType<Type>())
-        return reinterpret_cast<const Type*>(header);
+    for (const VkBaseInStructure* header = std::bit_cast<VkBaseInStructure*, const AnyStructBase* const>(obj); header; header = header->pNext) {
+      if (header->sType == ResolveSType<Type>()) {
+      	typedef union {
+      		struct {
+      			VkBaseInStructure base;
+      			char padding[sizeof(TypeBase)-sizeof(VkBaseInStructure)];
+      		};
+      		TypeBase tbase;
+      	} PaddedTypeBase;
+      	
+        PaddedTypeBase* b = std::launder(std::bit_cast<PaddedTypeBase*, const VkBaseInStructure*>(header));
+        
+        return &(b->tbase);
+      }
     }
     return nullptr;
   }
@@ -16644,6 +16678,67 @@ namespace vkroots::tables {
 
 }
 
+namespace vkroots {
+  template <class R, class... TArgs>
+  class constexpr_function<R(TArgs...)> {
+    struct interface {
+      constexpr virtual auto __attribute__((visibility("internal"))) operator()(TArgs...) __restrict__ const -> R {
+        __builtin_unreachable();
+      }
+    }; //interface
+
+    template <class Fn>
+    struct implementation final : interface {
+      consteval implementation() : fn{} {}
+      consteval implementation(Fn fn) : fn{*fn}, f{*(this->fn)} {}
+      consteval implementation(const implementation<Fn>& __restrict__ other) = default;
+      consteval const implementation<Fn>& operator=(const implementation<Fn>& __retrict__ ) const {
+        return std::move(*this);
+      }
+      constexpr auto __attribute__((visibility("internal"))) operator()(TArgs... args) const -> R override {
+        if constexpr ( (std::is_trivial_v<Fn> || std::is_fundamental_v<Fn>)
+                       && std::is_same<R,std::nullptr_t>::value ) {
+          return;
+        } else if (!fn) {
+          __builtin_unreachable();
+        } else if constexpr (sizeof...(TArgs) == 0) {
+          return (f)();
+        } else {
+          return (f)(args...);
+        }
+      }
+
+	  
+
+      private:
+        std::optional<std::remove_pointer_t<Fn>> fn;
+        const std::remove_pointer_t<Fn>& f;
+    }; //implementation
+
+    public:
+      constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {};
+
+      template <class Fn> requires std::invocable<Fn, TArgs...> || ConceptNullFunc<Fn, R>
+      constexpr constexpr_function(Fn fn) : m_fn{static_cast<const interface>(implementation<Fn* __restrict__>(&fn))} {
+      }
+
+      constexpr auto __attribute__((visibility("protected"))) operator()(TArgs... args) const -> R {
+        if constexpr (sizeof...(TArgs) == 0) {
+          return (m_fn)();
+        } else {
+          return (m_fn)(args...);
+        }
+      }
+      
+      constexpr operator bool() __restrict__ const {
+        return m_fn != nullptr;
+      }
+
+    private:
+      [[no_unique_address]] const interface __attribute__((visibility("internal"))) m_fn{};
+  }; //constexpr_function
+} // vkroots
+
 
 namespace vkroots::helpers {
 
@@ -16830,8 +16925,8 @@ namespace vkroots {
   class ChainPatcher {
   public:
     template <typename AnyStruct>
-    ChainPatcher(const AnyStruct *obj, std::function<bool(UserData&, Type *)> func) {
-      const Type *type = vkroots::FindInChain<Type>(obj);
+    constexpr ChainPatcher(const AnyStruct * __restrict__ obj, constexpr_function<bool(UserData&, Type *)> func) {
+      const Type * __restrict__ type = vkroots::FindInChain<Type>(obj);
       if (type) {
         func(m_ctx, const_cast<Type *>(type));
       } else {
@@ -16844,8 +16939,8 @@ namespace vkroots {
     }
 
     template <typename AnyStruct>
-    ChainPatcher(const AnyStruct *obj, std::function<bool(Type *)> func)
-      : ChainPatcher(obj, [&](UserData& ctx, Type *obj) { return func(obj); }) {
+    constexpr ChainPatcher(const AnyStruct * __restrict__ obj, constexpr_function<bool(Type *)> func)
+      : ChainPatcher(obj, [func](UserData& ctx, Type *obj) { return func(obj); }) {
     }
 
   private:

@@ -1,3 +1,64 @@
+namespace vkroots {
+  template <class R, class... TArgs>
+  class constexpr_function<R(TArgs...)> {
+    struct interface {
+      constexpr virtual auto __attribute__((visibility("internal"))) operator()(TArgs...) __restrict__ const -> R {
+        __builtin_unreachable();
+      }
+    }; //interface
+
+    template <class Fn>
+    struct implementation final : interface {
+      consteval implementation() : fn{} {}
+      consteval implementation(Fn fn) : fn{*fn}, f{*(this->fn)} {}
+      consteval implementation(const implementation<Fn>& __restrict__ other) = default;
+      consteval const implementation<Fn>& operator=(const implementation<Fn>& __retrict__ ) const {
+        return std::move(*this);
+      }
+      constexpr auto __attribute__((visibility("internal"))) operator()(TArgs... args) const -> R override {
+        if constexpr ( (std::is_trivial_v<Fn> || std::is_fundamental_v<Fn>)
+                       && std::is_same<R,std::nullptr_t>::value ) {
+          return;
+        } else if (!fn) {
+          __builtin_unreachable();
+        } else if constexpr (sizeof...(TArgs) == 0) {
+          return (f)();
+        } else {
+          return (f)(args...);
+        }
+      }
+
+	  
+
+      private:
+        std::optional<std::remove_pointer_t<Fn>> fn;
+        const std::remove_pointer_t<Fn>& f;
+    }; //implementation
+
+    public:
+      constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {};
+
+      template <class Fn> requires std::invocable<Fn, TArgs...> || ConceptNullFunc<Fn, R>
+      constexpr constexpr_function(Fn fn) : m_fn{static_cast<const interface>(implementation<Fn* __restrict__>(&fn))} {
+      }
+
+      constexpr auto __attribute__((visibility("protected"))) operator()(TArgs... args) const -> R {
+        if constexpr (sizeof...(TArgs) == 0) {
+          return (m_fn)();
+        } else {
+          return (m_fn)(args...);
+        }
+      }
+      
+      constexpr operator bool() __restrict__ const {
+        return m_fn != nullptr;
+      }
+
+    private:
+      [[no_unique_address]] const interface __attribute__((visibility("internal"))) m_fn{};
+  }; //constexpr_function
+} // vkroots
+
 
 namespace vkroots::helpers {
 
@@ -184,8 +245,8 @@ namespace vkroots {
   class ChainPatcher {
   public:
     template <typename AnyStruct>
-    ChainPatcher(const AnyStruct *obj, std::function<bool(UserData&, Type *)> func) {
-      const Type *type = vkroots::FindInChain<Type>(obj);
+    constexpr ChainPatcher(const AnyStruct * __restrict__ obj, constexpr_function<bool(UserData&, Type *)> func) {
+      const Type * __restrict__ type = vkroots::FindInChain<Type>(obj);
       if (type) {
         func(m_ctx, const_cast<Type *>(type));
       } else {
@@ -198,8 +259,8 @@ namespace vkroots {
     }
 
     template <typename AnyStruct>
-    ChainPatcher(const AnyStruct *obj, std::function<bool(Type *)> func)
-      : ChainPatcher(obj, [&](UserData& ctx, Type *obj) { return func(obj); }) {
+    constexpr ChainPatcher(const AnyStruct * __restrict__ obj, constexpr_function<bool(Type *)> func)
+      : ChainPatcher(obj, [func](UserData& ctx, Type *obj) { return func(obj); }) {
     }
 
   private:

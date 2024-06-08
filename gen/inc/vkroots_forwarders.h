@@ -1,5 +1,25 @@
 namespace vkroots {
 
+  template <class>
+  class constexpr_function;
+  
+  template <class R, class... TArgs>
+  class constexpr_function<R(TArgs...)>;
+  
+  template <class> struct function_traits {};
+
+  template <class R, class B, class... TArgs>
+  struct function_traits<R (B::*)(TArgs...) const> {
+    using type = R(TArgs...);
+  };
+
+  template <class F>
+  constexpr_function(F) -> constexpr_function<typename function_traits<decltype(&F::operator())>::type>;
+  
+  template <class Fn, class R>
+  concept ConceptNullFunc = (std::is_trivial_v<Fn> || std::is_fundamental_v<Fn>)
+                       && std::is_same<R,std::nullptr_t>::value;
+
   // Consistency!
   using PFN_vkGetPhysicalDeviceProcAddr = PFN_GetPhysicalDeviceProcAddr;
 
@@ -34,12 +54,25 @@ namespace vkroots {
   }
 
   template <typename Type, typename AnyStruct>
-  const Type* FindInChain(const AnyStruct* obj) {
+  constexpr const Type* FindInChain(const AnyStruct* obj) {
+  	using AnyStructBase = std::remove_cvref_t<AnyStruct>;
+  	using TypeBase = std::remove_cvref_t<Type>;
     static_assert(TypeIsSinglePointer<decltype(obj)>());
 
-    for (const VkBaseInStructure* header = reinterpret_cast<const VkBaseInStructure*>(obj); header; header = header->pNext) {
-      if (header->sType == ResolveSType<Type>())
-        return reinterpret_cast<const Type*>(header);
+    for (const VkBaseInStructure* header = std::bit_cast<VkBaseInStructure*, const AnyStructBase* const>(obj); header; header = header->pNext) {
+      if (header->sType == ResolveSType<Type>()) {
+      	typedef union {
+      		struct {
+      			VkBaseInStructure base;
+      			char padding[sizeof(TypeBase)-sizeof(VkBaseInStructure)];
+      		};
+      		TypeBase tbase;
+      	} PaddedTypeBase;
+      	
+        PaddedTypeBase* b = std::launder(std::bit_cast<PaddedTypeBase*, const VkBaseInStructure*>(header));
+        
+        return &(b->tbase);
+      }
     }
     return nullptr;
   }
