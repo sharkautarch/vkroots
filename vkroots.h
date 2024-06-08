@@ -91,17 +91,20 @@ namespace vkroots {
 
     for (const VkBaseInStructure* header = std::bit_cast<VkBaseInStructure*, const AnyStructBase* const>(obj); header; header = header->pNext) {
       if (header->sType == ResolveSType<Type>()) {
-      	typedef union {
-      		struct {
+        typedef struct {
       			VkBaseInStructure base;
       			char padding[sizeof(TypeBase)-sizeof(VkBaseInStructure)];
-      		};
+      	} PaddedStruct_t;
+      	
+      	typedef union {
+      		PaddedStruct_t s;
       		TypeBase tbase;
       	} PaddedTypeBase;
       	
-        PaddedTypeBase* b = std::launder(std::bit_cast<PaddedTypeBase*, const VkBaseInStructure*>(header));
+        const PaddedStruct_t* b = std::bit_cast<PaddedStruct_t*, const VkBaseInStructure*>(header);
         
-        return &(b->tbase);
+        
+        return std::bit_cast<const TypeBase*, const PaddedStruct_t*>(b);
       }
     }
     return nullptr;
