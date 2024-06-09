@@ -57,13 +57,13 @@ namespace vkroots {
       }
 
     protected:
-      struct fn_internal_t {
+      struct alignas(8) fn_internal_t {
         union {
           Fn fn;
-          char padding[sizeof(Fn)];
+          char padding[std::max(sizeof(Fn), sizeof(int32_t))];
         };
       };
-      fn_internal_t fn = {.padding={}};
+      fn_internal_t fn;
   };
 
  public:
