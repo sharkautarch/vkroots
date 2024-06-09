@@ -16696,7 +16696,7 @@ namespace vkroots::tables {
 namespace vkroots {
 #ifdef __GNUC__
   #define VKROOTS_INLINE_ATTR __attribute__((always_inline))
-  #define VKROOTS_FLATTEN_ATTR __attribute__((visibility("hidden"), flatten))
+  #define VKROOTS_FLATTEN_ATTR __attribute__((visibility("protected"), flatten))
 #else
   #define VKROOTS_INLINE_ATTR
   #define VKROOTS_FLATTEN_ATTR
@@ -16735,11 +16735,11 @@ namespace vkroots {
   struct implementation final : interface {
     friend struct interface;
     
-    constexpr implementation( Fn fn) : fn{.fn=fn} {
+    constexpr implementation( Fn fn) : fn{std::in_place_t{}, fn } {
       interface::template Init<implementation>();
     }
     
-    consteval implementation() : fn{ .padding={} } {}
+    consteval implementation() {}
     
     constexpr const implementation<Fn>& operator=(const implementation<Fn>& __retrict__ ) const {
         return std::move(*this);
@@ -16747,17 +16747,11 @@ namespace vkroots {
     
     private:
       constexpr R VKROOTS_FLATTEN_ATTR siRun( TArgs... args ) const { 
-        return (fn.fn)(args...);
+        return ((*fn))(args...);
       }
 
     protected:
-      struct alignas(16) fn_internal_t {
-        union {
-          Fn fn;
-          char padding[std::max(sizeof(Fn), sizeof(int64_t))];
-        };
-      };
-      fn_internal_t fn;
+      std::optional<Fn> fn;
   };
 
  public:
