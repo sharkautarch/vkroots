@@ -7,6 +7,10 @@ namespace vkroots {
   #define VKROOTS_FLATTEN_ATTR
 #endif
 
+  consteval decltype(auto) force_consteval(auto in) {
+    return in;
+  }
+
   template <class R, class... TArgs>
   class constexpr_function<R(TArgs...)> {
 
@@ -40,17 +44,21 @@ namespace vkroots {
   struct implementation final : interface {
     friend struct interface;
     
-    constexpr implementation( Fn fn) : fn{std::in_place_t{}, fn } {
+    constexpr implementation( Fn fn) : fn{fn} {
       interface::template Init<implementation>();
     }
+    
+    /*constexpr ~implementation() {
+      this->~fn();
+    }*/
     
     /*consteval const interface& getParent() {
     	return static_cast<interface>(*this);
     }*/
     
-    consteval implementation() {}
+    //consteval implementation() : fn{ .padding={} } {}
    
-    constexpr implementation(const implementation& __restrict__ other) : fn{std::in_place_t{}, *(other.fn)} {
+    constexpr implementation(const implementation& __restrict__ other) : fn{other.fn} {
     	interface::template Init<implementation>();
     }
     
@@ -60,25 +68,49 @@ namespace vkroots {
     
     private:
       constexpr R VKROOTS_FLATTEN_ATTR siRun( TArgs... args ) const { 
-        return ((*fn))(args...);
+        return (fn)(args...);
       }
 
     protected:
-      std::optional<Fn> fn;
+      /*struct alignas(8) fn_internal_t {
+        union {
+          Fn fn;
+          char padding[std::max(sizeof(Fn), sizeof(int32_t))];
+        };
+      };
+      [[no_unique_address]] fn_internal_t fn;*/
+      Fn fn;
   };
 
  public:
-  constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {}
+  //constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {}
+  //consteval constexpr_function(size_t size) : buf{size} {}
+
+  /*template <typename Fn>
+  constexpr const implementation<Fn>* const implOnStack(Fn& fn) {
+    return new (buf.data()) implementation<Fn>(fn);
+  }*/
 
   template <typename Fn>
-  static constexpr const interface& implToInterface(implementation<Fn> impl) {
-    impl_holder<Fn> = impl;
-    return *(impl_holder<Fn>);
+  constexpr interface getInterface(Fn& fn) {
+    if constexpr ( requires { new (bufOne) implementation<Fn>(fn); } ) 
+      return *(static_cast<const interface* const>(new (bufOne) implementation<Fn>(fn)));
+    if constexpr ( requires { new (bufTwo) implementation<Fn>(fn); } ) 
+      return *(static_cast<const interface* const>(new (bufTwo) implementation<Fn>(fn)));
+    if constexpr ( requires { new (bufThree) implementation<Fn>(fn); } ) 
+      return *(static_cast<const interface* const>(new (bufThree) implementation<Fn>(fn)));
   }
+  
+  template <typename Fn>
+  static constexpr size_t getSize() {
+    return sizeof(implementation<Fn>)/sizeof(std::byte);
+  }
+  
+  //constexpr ~constexpr_function() {}
 
   template <class Fn> requires std::invocable<Fn, TArgs...> || ConceptNullFunc<Fn, R>
-  constexpr  constexpr_function(Fn fn) : m_fn{ implToInterface(implementation<Fn>(fn)) }  {}
-
+  constexpr constexpr_function(Fn fn) : m_fn{ getInterface(fn) }  {}
+  //constexpr  constexpr_function(Fn fn) : 
   constexpr auto VKROOTS_FLATTEN_ATTR operator()(TArgs... args) const -> R {
 	 if constexpr (sizeof...(TArgs) == 0)
 	 	return (m_fn.siRun)();
@@ -93,10 +125,13 @@ namespace vkroots {
   }
 
  private:
-  template <typename T>
-  static constinit inline std::optional<implementation<T>> impl_holder;
+  union {
+    [[no_unique_address]] char bufOne[4000];
+    [[no_unique_address]] char bufTwo[8000];
+    [[no_unique_address]] char bufThree[16000];
+  };
  
-  const interface& m_fn{};
+  [[no_unique_address]] const interface m_fn{};
 };// end of constexpr_func class
 } // vkroots
 
