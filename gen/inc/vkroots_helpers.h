@@ -1,4 +1,3 @@
-
 namespace vkroots {
 #ifdef __GNUC__
   #define VKROOTS_INLINE_ATTR __attribute__((always_inline))
@@ -45,7 +44,15 @@ namespace vkroots {
       interface::template Init<implementation>();
     }
     
+    /*consteval const interface& getParent() {
+    	return static_cast<interface>(*this);
+    }*/
+    
     consteval implementation() {}
+   
+    constexpr implementation(const implementation& __restrict__ other) : fn{std::in_place_t{}, *(other.fn)} {
+    	interface::template Init<implementation>();
+    }
     
     constexpr const implementation<Fn>& operator=(const implementation<Fn>& __retrict__ ) const {
         return std::move(*this);
@@ -63,8 +70,14 @@ namespace vkroots {
  public:
   constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {}
 
+  template <typename Fn>
+  static constexpr const interface& implToInterface(implementation<Fn> impl) {
+    impl_holder<Fn> = impl;
+    return *(impl_holder<Fn>);
+  }
+
   template <class Fn> requires std::invocable<Fn, TArgs...> || ConceptNullFunc<Fn, R>
-  constexpr  constexpr_function(Fn fn) : m_fn{implementation<Fn>(fn)}  {}
+  constexpr  constexpr_function(Fn fn) : m_fn{ implToInterface(implementation<Fn>(fn)) }  {}
 
   constexpr auto VKROOTS_FLATTEN_ATTR operator()(TArgs... args) const -> R {
 	 if constexpr (sizeof...(TArgs) == 0)
@@ -80,7 +93,10 @@ namespace vkroots {
   }
 
  private:
-  interface m_fn{};
+  template <typename T>
+  static constinit inline std::optional<implementation<T>> impl_holder;
+ 
+  const interface& m_fn{};
 };// end of constexpr_func class
 } // vkroots
 
