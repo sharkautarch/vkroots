@@ -1,7 +1,7 @@
 // The vkroots.h header is licensed under Apache-2.0 OR MIT
 // as it was generated from the Vulkan Registry, which is licensed
 // under the same license.
-
+#pragma interface
 #pragma once
 
 #include <vulkan/vk_layer.h>
@@ -16681,65 +16681,101 @@ namespace vkroots::tables {
 
 }
 
+
 namespace vkroots {
   template <class R, class... TArgs>
   class constexpr_function<R(TArgs...)> {
-    struct interface {
-      constexpr virtual auto __attribute__((visibility("internal"))) operator()(TArgs...) __restrict__ const -> R {
-        __builtin_unreachable();
-      }
-    }; //interface
 
-    template <class Fn>
-    struct implementation final : interface {
-      consteval implementation() : fn{} {}
-      consteval implementation(Fn fn) : fn{fn}, f{*(this->fn)} {}
-      consteval implementation(const implementation<Fn>& __restrict__ other) = default;
-      consteval const implementation<Fn>& operator=(const implementation<Fn>& __retrict__ ) const {
+  //lamda holding base+derived classes use the "Simulated C++ Interface Template Pattern"
+  //approach described here: https://www.codeproject.com/articles/603818/cplusplus-runtime-polymorphism-without-virtual-fun
+  //to avoid using virtual functions to reduce the amount of indirection at runtime
+  struct interface {
+	typedef R (*PFN_RUN_T)(const void* const, TArgs...);
+ 
+    PFN_RUN_T m_pfnRun_T;
+ 
+    template<typename T> 
+    static constexpr R __attribute__((always_inline)) Run_T( const void* const pObj, TArgs... args ) {
+      return static_cast<const T* const>(pObj)->siRun( args... ); }
+
+    constexpr interface() : m_pfnRun_T( 0 ) {}
+     
+ 
+    constexpr R __attribute__((visibility("hidden"), flatten)) siRun(  TArgs... args ) const {
+      return (*m_pfnRun_T)( this, args... );
+    }
+
+    protected:
+      template<typename T>
+      constexpr void Init() {
+        m_pfnRun_T = (PFN_RUN_T) &Run_T<T>;
+      }
+  };
+
+  template <typename Fn>
+  struct implementation final : interface {
+    friend struct interface;
+    
+    constexpr implementation( Fn fn) : fn{.fn=fn} {
+      interface::template Init<implementation>();
+    }
+    
+    consteval implementation() : fn{ .padding={} } {
+      //interface::template Init<implementation>();
+    }
+    
+    constexpr const implementation<Fn>& operator=(const implementation<Fn>& __retrict__ ) const {
         return std::move(*this);
-      }
-      constexpr auto __attribute__((visibility("internal"))) operator()(TArgs... args) const -> R override {
-        if constexpr ( (std::is_trivial_v<Fn> || std::is_fundamental_v<Fn>)
-                       && std::is_same<R,std::nullptr_t>::value ) {
-          return;
-        } else if (!fn) {
-          __builtin_unreachable();
-        } else if constexpr (sizeof...(TArgs) == 0) {
-          return (f)();
-        } else {
-          return (f)(args...);
-        }
-      }
-
-	  
-
-      private:
-        std::optional<std::remove_pointer_t<Fn>> fn;
-        const std::remove_pointer_t<Fn>& f;
-    }; //implementation
-
-    public:
-      constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {};
-
-      template <class Fn> requires std::invocable<Fn, TArgs...> || ConceptNullFunc<Fn, R>
-      constexpr constexpr_function(Fn fn) : m_fn{static_cast<const interface>(implementation<Fn>(fn))} {
-      }
-
-      constexpr auto __attribute__((visibility("protected"))) operator()(TArgs... args) const -> R {
-        if constexpr (sizeof...(TArgs) == 0) {
-          return (m_fn)();
-        } else {
-          return (m_fn)(args...);
-        }
-      }
-      
-      constexpr operator bool() __restrict__ const {
-        return m_fn != nullptr;
-      }
-
+    }
+    
     private:
-      [[no_unique_address]] const interface __attribute__((visibility("internal"))) m_fn{};
-  }; //constexpr_function
+      constexpr R __attribute__((visibility("hidden"), flatten)) siRun( TArgs... args ) const { 
+        return (fn.fn)(args...);
+      }
+
+    protected:
+      struct fn_internal_t {
+        union {
+          Fn fn;
+          char padding[sizeof(Fn)];
+        };
+      };
+      fn_internal_t __attribute__((retain)) fn = {.padding={}};
+  };
+
+
+ public:
+  constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {}
+
+  template <class Fn> requires std::invocable<Fn, TArgs...> || ConceptNullFunc<Fn, R>
+  constexpr  constexpr_function(Fn fn) : m_fn{implementation<Fn>(fn)}  {
+  	/*if constexpr ((std::is_trivial_v<Fn> || std::is_fundamental_v<Fn>)
+	                    && (std::is_same<R,std::nullptr_t>::value)) {
+	 		return;
+    } else {
+	    this->m_fn = implementation<Fn>(fn);
+  	}*/
+  }
+
+  constexpr auto __attribute__((visibility("hidden"), flatten)) operator()(TArgs... args) const -> R {
+	 if constexpr (sizeof...(TArgs) == 0)
+	 	return (m_fn.siRun)();
+	 else if constexpr (sizeof...(TArgs) != 0) {
+	    return (m_fn.siRun)(args...);
+	 } else {
+	    __builtin_unreachable();
+	 }
+  }
+  constexpr operator bool() {
+  	return true;
+  }
+
+ private:
+  /*template <typename T>
+  static inline constinit T __attribute__((visibility("internal"), section("func"))) fn_holder;*/
+   
+  interface m_fn{};
+};
 } // vkroots
 
 
