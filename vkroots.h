@@ -16786,13 +16786,13 @@ namespace vkroots {
   }*/
 
   template <typename Fn>
-  constexpr interface getInterface(Fn& fn) {
+  constexpr interface* getInterface(Fn& fn) {
     if constexpr ( requires { new (bufOne) implementation<Fn>(fn); } ) 
-      return *(static_cast<const interface* const>(new (bufOne) implementation<Fn>(fn)));
+      return (static_cast<const interface* const>(new (bufOne) implementation<Fn>(fn)));
     if constexpr ( requires { new (bufTwo) implementation<Fn>(fn); } ) 
-      return *(static_cast<const interface* const>(new (bufTwo) implementation<Fn>(fn)));
+      return (static_cast<const interface* const>(new (bufTwo) implementation<Fn>(fn)));
     if constexpr ( requires { new (bufThree) implementation<Fn>(fn); } ) 
-      return *(static_cast<const interface* const>(new (bufThree) implementation<Fn>(fn)));
+      return (static_cast<const interface* const>(new (bufThree) implementation<Fn>(fn)));
   }
   
   template <typename Fn>
@@ -16825,7 +16825,7 @@ namespace vkroots {
     [[no_unique_address]] char bufThree[16000];
   };
  
-  [[no_unique_address]] const interface m_fn{};
+  [[no_unique_address]] const interface* m_fn{};
 };// end of constexpr_func class
 } // vkroots
 
