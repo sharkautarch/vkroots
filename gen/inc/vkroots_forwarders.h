@@ -53,8 +53,16 @@ namespace vkroots {
     return true;
   }
 
+#if VKROOTS_USE_CONSTEXPR_FUNC
+  #define VKROOTS_CHAINPATCHER_FUNC constexpr_function
+  #define VKROOTS_CHAINPATCHER_ATTR constexpr
+#else
+  #define VKROOTS_CHAINPATCHER_FUNC std::function
+  #define VKROOTS_CHAINPATCHER_ATTR
+#endif
+
   template <typename Type, typename AnyStruct>
-  constexpr const Type* FindInChain(const AnyStruct* obj) {
+  VKROOTS_CHAINPATCHER_ATTR const Type* FindInChain(const AnyStruct* obj) {
   	using AnyStructBase = std::remove_cvref_t<AnyStruct>;
   	using TypeBase = std::remove_cvref_t<Type>;
     static_assert(TypeIsSinglePointer<decltype(obj)>());
@@ -79,6 +87,9 @@ namespace vkroots {
     }
     return nullptr;
   }
+
+#undef VKROOTS_CHAINPATCHER_FUNC
+#undef VKROOTS_CHAINPATCHER_ATTR
 
   template <typename Type, typename AnyStruct>
   Type* FindInChainMutable(AnyStruct* obj) {

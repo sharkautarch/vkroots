@@ -1,7 +1,7 @@
 // The vkroots.h header is licensed under Apache-2.0 OR MIT
 // as it was generated from the Vulkan Registry, which is licensed
 // under the same license.
-#pragma interface
+
 #pragma once
 
 #include <vulkan/vk_layer.h>

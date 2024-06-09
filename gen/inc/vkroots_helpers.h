@@ -1,5 +1,13 @@
 
 namespace vkroots {
+#ifdef __GNUC__
+  #define VKROOTS_INLINE_ATTR __attribute__((always_inline))
+  #define VKROOTS_FLATTEN_ATTR __attribute__((visibility("hidden"), flatten))
+#else
+  #define VKROOTS_INLINE_ATTR
+  #define VKROOTS_FLATTEN_ATTR
+#endif
+
   template <class R, class... TArgs>
   class constexpr_function<R(TArgs...)> {
 
@@ -12,13 +20,13 @@ namespace vkroots {
     PFN_RUN_T m_pfnRun_T;
  
     template<typename T> 
-    static constexpr R __attribute__((always_inline)) Run_T( const void* const pObj, TArgs... args ) {
+    static constexpr R VKROOTS_INLINE_ATTR Run_T( const void* const pObj, TArgs... args ) {
       return static_cast<const T* const>(pObj)->siRun( args... ); }
 
     constexpr interface() : m_pfnRun_T( 0 ) {}
      
  
-    constexpr R __attribute__((visibility("hidden"), flatten)) siRun(  TArgs... args ) const {
+    constexpr R VKROOTS_FLATTEN_ATTR siRun(  TArgs... args ) const {
       return (*m_pfnRun_T)( this, args... );
     }
 
@@ -37,16 +45,14 @@ namespace vkroots {
       interface::template Init<implementation>();
     }
     
-    consteval implementation() : fn{ .padding={} } {
-      //interface::template Init<implementation>();
-    }
+    consteval implementation() : fn{ .padding={} } {}
     
     constexpr const implementation<Fn>& operator=(const implementation<Fn>& __retrict__ ) const {
         return std::move(*this);
     }
     
     private:
-      constexpr R __attribute__((visibility("hidden"), flatten)) siRun( TArgs... args ) const { 
+      constexpr R VKROOTS_FLATTEN_ATTR siRun( TArgs... args ) const { 
         return (fn.fn)(args...);
       }
 
@@ -57,24 +63,16 @@ namespace vkroots {
           char padding[sizeof(Fn)];
         };
       };
-      fn_internal_t __attribute__((retain)) fn = {.padding={}};
+      fn_internal_t fn = {.padding={}};
   };
-
 
  public:
   constexpr constexpr_function(const constexpr_function& __restrict__ other) : m_fn{other.m_fn} {}
 
   template <class Fn> requires std::invocable<Fn, TArgs...> || ConceptNullFunc<Fn, R>
-  constexpr  constexpr_function(Fn fn) : m_fn{implementation<Fn>(fn)}  {
-  	/*if constexpr ((std::is_trivial_v<Fn> || std::is_fundamental_v<Fn>)
-	                    && (std::is_same<R,std::nullptr_t>::value)) {
-	 		return;
-    } else {
-	    this->m_fn = implementation<Fn>(fn);
-  	}*/
-  }
+  constexpr  constexpr_function(Fn fn) : m_fn{implementation<Fn>(fn)}  {}
 
-  constexpr auto __attribute__((visibility("hidden"), flatten)) operator()(TArgs... args) const -> R {
+  constexpr auto VKROOTS_FLATTEN_ATTR operator()(TArgs... args) const -> R {
 	 if constexpr (sizeof...(TArgs) == 0)
 	 	return (m_fn.siRun)();
 	 else if constexpr (sizeof...(TArgs) != 0) {
@@ -88,12 +86,12 @@ namespace vkroots {
   }
 
  private:
-  /*template <typename T>
-  static inline constinit T __attribute__((visibility("internal"), section("func"))) fn_holder;*/
-   
   interface m_fn{};
-};
+};// end of constexpr_func class
 } // vkroots
+
+#undef VKROOTS_INLINE_ATTR
+#undef VKROOTS_FLATTEN_ATTR
 
 
 namespace vkroots::helpers {
@@ -277,11 +275,19 @@ namespace vkroots::helpers {
 }
 
 namespace vkroots {
+#if VKROOTS_USE_CONSTEXPR_FUNC
+  #define VKROOTS_CHAINPATCHER_FUNC constexpr_function
+  #define VKROOTS_CHAINPATCHER_ATTR constexpr
+#else
+  #define VKROOTS_CHAINPATCHER_FUNC std::function
+  #define VKROOTS_CHAINPATCHER_ATTR
+#endif
+
   template <typename Type, typename UserData = uint64_t>
   class ChainPatcher {
   public:
     template <typename AnyStruct>
-    constexpr ChainPatcher(const AnyStruct * __restrict__ obj, constexpr_function<bool(UserData&, Type *)> func) {
+    VKROOTS_CHAINPATCHER_ATTR ChainPatcher(const AnyStruct * __restrict__ obj, VKROOTS_CHAINPATCHER_FUNC<bool(UserData&, Type *)> func) {
       const Type * __restrict__ type = vkroots::FindInChain<Type>(obj);
       if (type) {
         func(m_ctx, const_cast<Type *>(type));
@@ -295,7 +301,7 @@ namespace vkroots {
     }
 
     template <typename AnyStruct>
-    constexpr ChainPatcher(const AnyStruct * __restrict__ obj, constexpr_function<bool(Type *)> func)
+    VKROOTS_CHAINPATCHER_ATTR ChainPatcher(const AnyStruct * __restrict__ obj, VKROOTS_CHAINPATCHER_FUNC<bool(Type *)> func)
       : ChainPatcher(obj, [func](UserData& ctx, Type *obj) { return func(obj); }) {
     }
 
@@ -303,4 +309,7 @@ namespace vkroots {
     Type m_value{};
     UserData m_ctx;
   };
+  
+  #undef VKROOTS_CHAINPATCHER_FUNC
+  #undef VKROOTS_CHAINPATCHER_ATTR
 }

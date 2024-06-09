@@ -45,6 +45,22 @@ You can either add this repo as a git submodule, copy the header from this repo 
 The vkroots header can be generated from any Vulkan Registry XML (even for unreleased/non-standard extensions).
 This was used, for example, in the sample [VK_FOOL_printed_surface](https://github.com/Joshua-Ashton/VkLayer_FOOL_printed_surface_cups) implementation using CUPS.
 
+# Using constexpr-evaulated ChainPatcher:
+The vkroots::ChainPatcher class uses std::function & is not constexpr by default.
+If you're only passing functions/lamdas into ChainPatcher, and said functions/lamdas do not do non-transient dynamic memory allocation and are constexpr-evaluatable,
+then you can configure vkroots to use a constexpr alternative to std::function (the ChainPatcher constructors will also be marked as constexpr when using the constexpr alternative to std::function):
+
+Add the following to the top of your files that include vkroots (above the `include "vkroots.h"` line):
+```cpp
+#define VKROOTS_USE_CONSTEXPR_FUNC 1
+```
+
+for gcc and clang, add the (highly recommended) following compiler option to your layer's build settings, to minimize any increase in code size, and allow the compiler to better optimize functions passed to vkroots::ChainPatcher:
+`-fvisibility-inlines-hidden`
+This ensures that the compiler is able to optimize the function callbacks to direct function calls.
+ 
+(you can also add `-fno-rtti` and/or `-fvisibility-ms-compat`, if your codebase supports it, to further reduce binary size)
+
 ## Dependencies
 
 There are no dependencies other a C++20-capable compiler.
