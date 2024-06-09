@@ -16786,7 +16786,7 @@ namespace vkroots {
   }*/
 
   template <typename Fn>
-  constexpr interface* getInterface(Fn& fn) {
+  constexpr const interface* const getInterface(Fn& fn) {
     if constexpr ( requires { new (bufOne) implementation<Fn>(fn); } ) 
       return (static_cast<const interface* const>(new (bufOne) implementation<Fn>(fn)));
     if constexpr ( requires { new (bufTwo) implementation<Fn>(fn); } ) 
