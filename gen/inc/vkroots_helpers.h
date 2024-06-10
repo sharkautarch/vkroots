@@ -113,9 +113,9 @@ namespace vkroots {
   //constexpr  constexpr_function(Fn fn) : 
   constexpr auto VKROOTS_FLATTEN_ATTR operator()(TArgs... args) const -> R {
 	 if constexpr (sizeof...(TArgs) == 0)
-	 	return (m_fn.siRun)();
+	 	return (m_fn->siRun)();
 	 else if constexpr (sizeof...(TArgs) != 0) {
-	    return (m_fn.siRun)(args...);
+	    return (m_fn->siRun)(args...);
 	 } else {
 	    __builtin_unreachable();
 	 }
